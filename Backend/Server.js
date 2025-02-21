@@ -1,54 +1,87 @@
 require('dotenv').config();
 const express = require('express');
-const mysql = require('mysql2');
+const mysql = require('mysql2/promise');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'lalo',
-  database: 'usuarios'
-});
+const dbConfig = {
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME
+};
 
-db.connect(err => {
-  if (err) {
-    console.error('Error conectando a MySQL:', err);
-    return;
+// Función para conectar a la BD
+const connectDB = async () => {
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+    console.log('Conectado a MySQL');
+    return connection;
+  } catch (error) {
+    console.error('Error conectando a MySQL:', error);
+    process.exit(1);
   }
-  console.log('Conectado a MySQL');
-});
+};
 
-// Guardar registros
-app.post('/registro', (req, res) => {
+// Registro de usuario
+app.post('/registro', async (req, res) => {
   const { nombre, email, password } = req.body;
-  const sql = 'INSERT INTO registros (nombre, email, password) VALUES (?, ?, ?)';
-  db.query(sql, [nombre, email, password], (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
+
+  if (!nombre || !email || !password) {
+    return res.status(400).json({ error: 'Todos los campos son obligatorios' });
+  }
+
+  try {
+    const db = await connectDB();
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const sql = 'INSERT INTO registros (nombre, email, password) VALUES (?, ?, ?)';
+    
+    const [result] = await db.execute(sql, [nombre, email, hashedPassword]);
     res.json({ message: 'Usuario registrado', id: result.insertId });
-  });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Guardar logs de login
-app.post('/login', (req, res) => {
+// Login y registro de logs
+app.post('/login', async (req, res) => {
   const { email, password } = req.body;
-  const sql = 'SELECT * FROM registros WHERE email = ? AND password = ?';
-  db.query(sql, [email, password], (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
 
-    if (result.length > 0) {
-      const logSql = 'INSERT INTO logs (email, fecha) VALUES (?, NOW())';
-      db.query(logSql, [email], (logErr) => {
-        if (logErr) return res.status(500).json({ error: logErr.message });
-        res.json({ message: 'Login exitoso' });
-      });
-    } else {
-      res.status(401).json({ message: 'Credenciales incorrectas' });
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Todos los campos son obligatorios' });
+  }
+
+  try {
+    const db = await connectDB();
+    const sql = 'SELECT * FROM registros WHERE email = ?';
+    
+    const [rows] = await db.execute(sql, [email]);
+
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
-  });
+
+    const user = rows[0];
+    const passwordMatch = await bcrypt.compare(password, user.password);
+
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Credenciales incorrectas' });
+    }
+
+    const logSql = 'INSERT INTO logs (email, fecha) VALUES (?, NOW())';
+    await db.execute(logSql, [email]);
+
+    res.json({ message: 'Login exitoso' });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.listen(3000, () => console.log('Servidor corriendo en el puerto 3000'));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Servidor corriendo en el puerto ${PORT}`));
