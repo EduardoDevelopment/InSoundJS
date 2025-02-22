@@ -1,118 +1,208 @@
-import React, { useState } from "react";
-import { View, TextInput, Button, Switch, TouchableOpacity, Alert } from "react-native";
-import axios from "axios";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Alert, TouchableOpacity, Animated, Easing, TextInput, Text, Image, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { 
-  Container, 
-  Title, 
-  Input, 
-  ConsentContainer, 
-  ConsentText, 
-  LinkText, 
-  Logo 
-} from "../components/StyledComponents";
+import { register } from "../screens/_api";
 
 const RegisterScreen = () => {
   const navigation = useNavigation();
-  const [name, setName] = useState(""); // Nuevo input para nombre
+  const [name, setName] = useState(""); // Estado para el nombre
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [consent, setConsent] = useState(false);
 
-  const isValidEmail = (email) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  };
+  // Animaciones
+  const titleAnim = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.8)).current;
+  const buttonScale = useRef(new Animated.Value(1)).current;
+  const neonBorder = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(titleAnim, {
+      toValue: 1,
+      duration: 1500,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }).start();
+
+    Animated.spring(logoScale, {
+      toValue: 1,
+      friction: 5,
+      tension: 80,
+      useNativeDriver: true,
+    }).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(neonBorder, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: false,
+        }),
+        Animated.timing(neonBorder, {
+          toValue: 0,
+          duration: 1200,
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+  }, []);
 
   const handleRegister = async () => {
-    if (!name.trim()) {
-      Alert.alert("Error", "Por favor, ingresa tu nombre.");
-      return;
-    }
-
-    if (!email || !isValidEmail(email)) {
-      Alert.alert("Error", "Por favor, ingresa un email válido.");
-      return;
-    }
-    
-    if (!password || password.length < 6) {
-      Alert.alert("Error", "La contraseña debe tener al menos 6 caracteres.");
-      return;
-    }
-
     if (password !== confirmPassword) {
-      Alert.alert("Error", "Las contraseñas no coinciden.");
+      Alert.alert("Error", "Las contraseñas no coinciden");
       return;
     }
-
-    if (!consent) {
-      Alert.alert("Error", "Debes aceptar los términos y condiciones.");
-      return;
-    }
-
     try {
-      const response = await axios.post("http://192.168.100.6:3000/api/register", {
-        name,  // 🔹 Ahora enviamos el nombre al backend
-        email,
-        password
-      });
-
-      Alert.alert("Éxito", response.data.message || "Registro exitoso");
-      navigation.navigate("Home");
+      await register(name.trim(), email.trim(), password); // Incluye el nombre en el registro
+      Alert.alert("Éxito", "Registro exitoso");
+      navigation.navigate("Login");
     } catch (error) {
-      console.error("Error en el registro:", error);
-      Alert.alert("Error", error.response?.data?.message || error.message || "Error desconocido");
+      Alert.alert("Error", error.message || "Algo salió mal");
     }
   };
 
+  const handlePressIn = () => {
+    Animated.spring(buttonScale, {
+      toValue: 0.9,
+      speed: 20,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(buttonScale, {
+      toValue: 1,
+      speed: 10,
+      bounciness: 10,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const interpolatedNeon = neonBorder.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["rgba(0, 255, 255, 0.3)", "rgba(0, 255, 255, 1)"],
+  });
+
   return (
-    <Container>
-      <Logo source={require("../assets/logo.jpg")} />
-      <Title>Registro</Title>
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" }}>
+      <Animated.View style={{ transform: [{ scale: logoScale }] }}>
+        <Image source={require("../assets/logo.jpg")} style={{ width: 120, height: 120, borderRadius: 20 }} />
+      </Animated.View>
 
-      <Input 
-        placeholder="Nombre" 
-        value={name} 
-        onChangeText={setName} 
-        placeholderTextColor="gray" 
-      />
+      <Animated.Text
+        style={{
+          fontSize: 26,
+          color: "white",
+          fontWeight: "bold",
+          textAlign: "center",
+          opacity: titleAnim,
+          transform: [{ translateY: titleAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }],
+        }}
+      >
+        Registro
+      </Animated.Text>
 
-      <Input 
-        placeholder="Email" 
-        value={email} 
-        onChangeText={setEmail} 
-        keyboardType="email-address"
-        placeholderTextColor="gray" 
-      />
+      {/* Campo de entrada para el nombre */}
+      <Animated.View
+        style={{
+          borderWidth: 2,
+          borderColor: interpolatedNeon,
+          padding: 10,
+          width: "80%",
+          borderRadius: 8,
+          marginVertical: 10,
+        }}
+      >
+        <TextInput
+          placeholder="Nombre"
+          value={name}
+          onChangeText={setName}
+          placeholderTextColor="gray"
+          style={{ color: "white", fontSize: 16 }}
+        />
+      </Animated.View>
 
-      <Input 
-        placeholder="Contraseña" 
-        secureTextEntry 
-        value={password} 
-        onChangeText={setPassword} 
-        placeholderTextColor="gray" 
-      />
+      <Animated.View
+        style={{
+          borderWidth: 2,
+          borderColor: interpolatedNeon,
+          padding: 10,
+          width: "80%",
+          borderRadius: 8,
+          marginVertical: 10,
+        }}
+      >
+        <TextInput
+          placeholder="Email"
+          value={email}
+          onChangeText={setEmail}
+          placeholderTextColor="gray"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          style={{ color: "white", fontSize: 16 }}
+        />
+      </Animated.View>
 
-      <Input 
-        placeholder="Confirmar Contraseña" 
-        secureTextEntry 
-        value={confirmPassword} 
-        onChangeText={setConfirmPassword} 
-        placeholderTextColor="gray" 
-      />
+      <Animated.View
+        style={{
+          borderWidth: 2,
+          borderColor: interpolatedNeon,
+          padding: 10,
+          width: "80%",
+          borderRadius: 8,
+          marginVertical: 10,
+        }}
+      >
+        <TextInput
+          placeholder="Contraseña"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+          placeholderTextColor="gray"
+          style={{ color: "white", fontSize: 16 }}
+        />
+      </Animated.View>
 
-      <ConsentContainer>
-        <Switch value={consent} onValueChange={setConsent} />
-        <ConsentText>
-          Acepto los{" "}
-          <TouchableOpacity onPress={() => navigation.navigate("Terms")}>
-            <LinkText>Términos y Condiciones</LinkText>
-          </TouchableOpacity>
-        </ConsentText>
-      </ConsentContainer>
+      <Animated.View
+        style={{
+          borderWidth: 2,
+          borderColor: interpolatedNeon,
+          padding: 10,
+          width: "80%",
+          borderRadius: 8,
+          marginVertical: 10,
+        }}
+      >
+        <TextInput
+          placeholder="Confirmar Contraseña"
+          secureTextEntry
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          placeholderTextColor="gray"
+          style={{ color: "white", fontSize: 16 }}
+        />
+      </Animated.View>
 
-      <Button title="Registrarse" onPress={handleRegister} />
-    </Container>
+      <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+        <TouchableOpacity
+          onPress={handleRegister}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          disabled={!name || !email || !password || !confirmPassword}
+          style={{
+            backgroundColor: "cyan",
+            paddingVertical: 16,
+            paddingHorizontal: 32,
+            borderRadius: 10,
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: name && email && password && confirmPassword ? 1 : 0.5,
+          }}
+        >
+          <Text style={{ color: "black", fontSize: 18, fontWeight: "bold" }}>Registrarse</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
   );
 };
 

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://192.168.100.6:3001/api';
+const API_URL = 'http://192.168.38.15:3000/api';
 
 export const register = async (name, email, password) => {
   try {
@@ -17,5 +17,13 @@ export const login = async (identifier, password) => {
     return response.data;
   } catch (error) {
     throw error.response.data;
+  }
+};
+export const deleteAccount = async (userId) => {
+  try {
+    const response = await axios.delete(`${API_URL}/delete/${userId}`);
+    return response.data;
+  } catch (error) {
+    throw error.response ? error.response.data : "Error desconocido";
   }
 };
